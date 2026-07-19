@@ -1,0 +1,59 @@
+{
+  "name": "garmin-mcp",
+  "version": "1.0.0",
+  "description": "Local, read-only Garmin Connect MCP server for Claude Desktop (stdio).",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-desktop",
+    "anthropic",
+    "garmin",
+    "garmin-connect",
+    "garmin-connect-api",
+    "fitness",
+    "health-data",
+    "quantified-self",
+    "hrv",
+    "body-battery",
+    "training-readiness",
+    "typescript",
+    "nodejs",
+    "oauth2",
+    "stdio",
+    "self-hosted",
+    "cycletls"
+  ],
+  "homepage": "https://github.com/marcelfortmann/garmin-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marcelfortmann/garmin-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/marcelfortmann/garmin-mcp/issues"
+  },
+  "author": "Marcel Fortmann",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test test/*.test.ts",
+    "smoke": "tsx src/http/smoke.ts",
+    "login": "tsx src/cli/login.ts",
+    "start": "node build/mcp/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "cycletls": "^2.0.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

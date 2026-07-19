@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # Type-check + compile. `build` runs `tsc`, which covers the typecheck.
+      - run: npm run build
+      # Unit tests for the pure helpers (no network / no credentials).
+      - run: npm test
+      # NOTE: `smoke` and `login` are intentionally NOT run in CI — they need
+      # live Garmin access / real credentials and would be flaky.
