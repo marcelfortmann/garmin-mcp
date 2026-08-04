@@ -47,7 +47,7 @@
     "start": "node build/mcp/server.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "cycletls": "^2.0.5",
     "zod": "^3.25.76"
   },
