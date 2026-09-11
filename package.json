@@ -49,11 +49,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "cycletls": "^2.0.5",
-    "zod": "^3.25.76"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "@types/node": "^26.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
   }
 }
