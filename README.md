@@ -113,6 +113,49 @@ your password is never stored.
 - `src/mcp/server.ts` — MCP server, tool registration, stdio transport.
 - `src/cli/login.ts` — one-time interactive login.
 
+## Development
+
+```bash
+npm run build     # tsc -> build/
+npm test          # unit tests for the pure helpers (no network, no credentials)
+npm run smoke     # milestone test against Garmin's Cloudflare (needs network)
+npm run login     # one-time interactive login (needs your credentials)
+npm start         # run the built server directly (normally Claude Desktop does this)
+```
+
+CI (`.github/workflows/ci.yml`) runs `npm ci`, `npm run build` and `npm test` on
+Node 22. `build` doubles as the type-check. `smoke` and `login` are deliberately
+excluded — they need live Garmin access and real credentials, and would be flaky.
+
+`npm test` covers the pure helpers only (`trimLongArrays`, `decodeJwtExp`,
+`toSearchParams`) and never imports the MCP SDK, so a green test run says nothing
+about tool registration. After changing tools or upgrading dependencies, probe the
+server over stdio. **No Garmin credentials are needed** — registration and argument
+validation both happen before any authentication:
+
+```bash
+npm run build
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  | node build/mcp/server.js
+```
+
+Expect an `initialize` reply plus a `tools/list` reply containing all 13 tools with
+their input schemas. To also confirm that argument validation still bites, add one
+more line to the `printf` above — it should come back as `-32602`, not as a login
+error:
+
+```text
+'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_activity","arguments":{"activityId":"not-a-number"}}}' \
+```
+
+Dependencies are updated by Dependabot (`.github/dependabot.yml`, weekly). The npm
+updates arrive as **one grouped PR that can include major versions**, so read its
+`package.json` diff before merging, and run the stdio probe above rather than
+trusting a green build alone.
+
 ## Maintenance & risks (named honestly)
 
 This uses Garmin's **unofficial** internal API, ported from the open-source Python
