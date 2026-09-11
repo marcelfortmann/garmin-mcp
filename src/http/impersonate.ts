@@ -32,12 +32,18 @@ const initCycleTLS = initCycleTLSModule as unknown as (initOptions?: {
 // --- Maintainable fingerprint constants --------------------------------------
 // MAINTENANCE: On a 403 or a "Just a moment ..." Cloudflare page, update this
 // pair to a current Chrome. JA3 and User-Agent must match each other (same Chrome
-// major version). Sources for current JA3 strings: e.g. open tls.peet.ws /
-// ja3er.com in real Chrome.
+// major version) — a fresh UA on a stale fingerprint is a *stronger* bot signal
+// than a consistent old pair. Sources for current JA3 strings: e.g. open
+// tls.peet.ws / ja3er.com in real Chrome.
+//
+// The extension list carries what a modern Chrome sends: 27 (compress_certificate),
+// 17513 (ALPS) and 65037 (ECH). The first supported group is 4588
+// (X25519MLKEM768) — Chrome's post-quantum key share, sent since Chrome 131.
+// Verify any change with `npm run smoke` before committing it.
 export const CHROME_JA3 =
-  "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27,29-23-24,0";
+  "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-5-10-11-13-16-18-23-27-35-43-45-51-17513-65037-65281,4588-29-23-24,0";
 export const CHROME_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36";
 
 // NOTE: cycletls has TWO different timeouts with different units:
 //  - The init timeout (initCycleTLS) is the wait, in MILLISECONDS, for the Node
