@@ -13,6 +13,7 @@
  * IMPORTANT: stdout is the MCP protocol channel — NEVER write to it with
  * console.log. Diagnostics go to stderr only.
  */
+import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -131,7 +132,14 @@ async function collect(
 }
 
 // --- Server + tools ----------------------------------------------------------
-const server = new McpServer({ name: "garmin", version: "1.0.0" });
+// Single source of truth for the version: package.json. Resolved at runtime via
+// createRequire so it works both from build/mcp/ and from src/mcp/ under tsx,
+// and so the JSON stays outside tsconfig's `rootDir`.
+const pkg = createRequire(import.meta.url)("../../package.json") as {
+  version: string;
+};
+
+const server = new McpServer({ name: "garmin", version: pkg.version });
 
 server.registerTool(
   "whoami",
