@@ -77,7 +77,7 @@ selection). Long time series in responses are truncated to stay compact.
 | `list_activities` | Recent activities, or by date range/type (`limit`/`startDate`/`endDate`/`type`) |
 | `get_devices` | Paired Garmin devices |
 | `get_user_profile` | User profile & settings (units, preferences) |
-| `get_goals` | Goals (`status`: active/future/past) |
+| `get_goals` | Goals (`status`: active/future/past, `limit`) |
 | `get_workouts` | Saved workouts (`limit`) |
 | `get_scheduled_workouts` | Scheduled workouts / calendar (`year`/`month`) |
 
