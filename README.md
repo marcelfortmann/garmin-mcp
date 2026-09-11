@@ -58,6 +58,22 @@ Then **restart** Claude Desktop. Try it in chat, e.g.:
 > "Am I logged in to Garmin? Use `whoami`."
 > "Show me my daily summary and my recent activities."
 
+## Updating
+
+```bash
+git pull
+npm install      # dependencies may have changed
+npm run build    # build/ is not part of the repo
+```
+
+Then **restart Claude Desktop**. It runs the server as a child process, and a
+running instance keeps the code it loaded at startup — so an update only takes
+effect after a restart.
+
+Your login survives an update: `~/.garmin-mcp/tokens.json` is untouched and the
+path in `claude_desktop_config.json` stays the same. Only re-run `npm run login`
+if a tool actually reports `🔒 Not logged in`.
+
 ## Available tools
 
 **13 read-only tools.** Date parameters are `YYYY-MM-DD` (default = today); ranges
@@ -175,6 +191,7 @@ Expected breakage points and how to fix them:
 - **`🔒 Not logged in` / session expired** — run `npm run login` again.
 - **`⏳` rate limited (HTTP 429)** — Garmin is throttling; wait a bit and retry.
 - **First run is slow / cycletls errors** — `cycletls` downloads a small Go helper binary on first use; make sure it can execute and isn't blocked by the OS.
+- **Calls hang right after an update** — the previous server process may have left its `cycletls` Go helper behind. Check with `pgrep -fl cycletls` and clear it with `pkill -f cycletls`; the next call starts a fresh one.
 
 ## Re-login
 
