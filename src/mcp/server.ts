@@ -14,8 +14,8 @@
  * console.log. Diagnostics go to stderr only.
  */
 import { createRequire } from "node:module";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { z } from "zod";
 import { ImpersonatedHttp } from "../http/impersonate.js";
 import { GarminClient } from "../garmin/client.js";
@@ -139,393 +139,405 @@ const pkg = createRequire(import.meta.url)("../../package.json") as {
   version: string;
 };
 
-const server = new McpServer({ name: "garmin", version: pkg.version });
+/**
+ * Builds the server instance. `serveStdio` calls this once and pins the result
+ * to the connection; the Garmin client and HTTP singleton stay module-level.
+ */
+function createServer(): McpServer {
+  const server = new McpServer({ name: "garmin", version: pkg.version });
 
-server.registerTool(
-  "whoami",
-  {
-    description:
-      "Check the Garmin connection and return the logged-in account profile (display name, full name).",
-  },
-  async () => run(async () => (await getClient()).whoami()),
-);
+  // stdin EOF closes the connection. Release the cycletls helper (if one was
+  // spawned) so nothing keeps the event loop alive and the process can exit.
+  server.server.onclose = () => {
+    void httpSingleton?.close().catch(() => {});
+  };
 
-server.registerTool(
-  "get_daily_health",
-  {
-    description:
-      "Daily wellness metrics for a date. Pick one or more via `metrics`: " +
-      "summary, sleep, stress, heart_rate, hrv, spo2, respiration, hydration, " +
-      "steps, floors, intensity_minutes, body_battery, body_battery_events, stats_and_body.",
-    inputSchema: {
-      date: dateArg,
-      metrics: z
-        .array(
-          z.enum([
-            "summary",
-            "sleep",
-            "stress",
-            "heart_rate",
-            "hrv",
-            "spo2",
-            "respiration",
-            "hydration",
-            "steps",
-            "floors",
-            "intensity_minutes",
-            "body_battery",
-            "body_battery_events",
-            "stats_and_body",
-          ]),
-        )
-        .optional()
-        .describe("Which daily metrics to return. Default: [summary]."),
+  server.registerTool(
+    "whoami",
+    {
+      description:
+        "Check the Garmin connection and return the logged-in account profile (display name, full name).",
     },
-  },
-  async ({ date, metrics }) =>
-    run(async () => {
-      const c = await getClient();
-      const d = date ?? todayIso();
-      return collect(metrics, ["summary"], {
-        summary: () => c.getDailySummary(d),
-        sleep: () => c.getSleep(d),
-        stress: () => c.getStress(d),
-        heart_rate: () => c.getHeartRate(d),
-        hrv: () => c.getHrv(d),
-        spo2: () => c.getSpo2(d),
-        respiration: () => c.getRespiration(d),
-        hydration: () => c.getHydration(d),
-        steps: () => c.getSteps(d),
-        floors: () => c.getFloors(d),
-        intensity_minutes: () => c.getIntensityMinutes(d),
-        body_battery: () => c.getBodyBattery(d),
-        body_battery_events: () => c.getBodyBatteryEvents(d),
-        stats_and_body: () => c.getStatsAndBody(d),
-      });
-    }),
-);
+    async () => run(async () => (await getClient()).whoami()),
+  );
 
-server.registerTool(
-  "get_training",
-  {
-    description:
-      "Training metrics for a date. Pick via `metrics`: readiness, " +
-      "morning_readiness, status, vo2max, fitness_age.",
-    inputSchema: {
-      date: dateArg,
-      metrics: z
-        .array(
-          z.enum([
-            "readiness",
-            "morning_readiness",
-            "status",
-            "vo2max",
-            "fitness_age",
-          ]),
-        )
-        .optional()
-        .describe("Which training metrics to return. Default: [readiness, status, vo2max]."),
+  server.registerTool(
+    "get_daily_health",
+    {
+      description:
+        "Daily wellness metrics for a date. Pick one or more via `metrics`: " +
+        "summary, sleep, stress, heart_rate, hrv, spo2, respiration, hydration, " +
+        "steps, floors, intensity_minutes, body_battery, body_battery_events, stats_and_body.",
+      inputSchema: z.object({
+        date: dateArg,
+        metrics: z
+          .array(
+            z.enum([
+              "summary",
+              "sleep",
+              "stress",
+              "heart_rate",
+              "hrv",
+              "spo2",
+              "respiration",
+              "hydration",
+              "steps",
+              "floors",
+              "intensity_minutes",
+              "body_battery",
+              "body_battery_events",
+              "stats_and_body",
+            ]),
+          )
+          .optional()
+          .describe("Which daily metrics to return. Default: [summary]."),
+      }),
     },
-  },
-  async ({ date, metrics }) =>
-    run(async () => {
-      const c = await getClient();
-      const d = date ?? todayIso();
-      return collect(metrics, ["readiness", "status", "vo2max"], {
-        readiness: () => c.getTrainingReadiness(d),
-        morning_readiness: () => c.getMorningReadiness(d),
-        status: () => c.getTrainingStatus(d),
-        vo2max: () => c.getMaxMetrics(d),
-        fitness_age: () => c.getFitnessAge(d),
-      });
-    }),
-);
+    async ({ date, metrics }) =>
+      run(async () => {
+        const c = await getClient();
+        const d = date ?? todayIso();
+        return collect(metrics, ["summary"], {
+          summary: () => c.getDailySummary(d),
+          sleep: () => c.getSleep(d),
+          stress: () => c.getStress(d),
+          heart_rate: () => c.getHeartRate(d),
+          hrv: () => c.getHrv(d),
+          spo2: () => c.getSpo2(d),
+          respiration: () => c.getRespiration(d),
+          hydration: () => c.getHydration(d),
+          steps: () => c.getSteps(d),
+          floors: () => c.getFloors(d),
+          intensity_minutes: () => c.getIntensityMinutes(d),
+          body_battery: () => c.getBodyBattery(d),
+          body_battery_events: () => c.getBodyBatteryEvents(d),
+          stats_and_body: () => c.getStatsAndBody(d),
+        });
+      }),
+  );
 
-server.registerTool(
-  "get_fitness",
-  {
-    description:
-      "Fitness/performance metrics. Pick via `metrics`: race_predictions, " +
-      "cycling_ftp, lactate_threshold, personal_records (all latest, date-agnostic), " +
-      "and endurance_score, hill_score, resting_heart_rate, weekly_intensity_minutes (over the given date range).",
-    inputSchema: {
-      metrics: z
-        .array(
-          z.enum([
-            "race_predictions",
-            "cycling_ftp",
-            "lactate_threshold",
-            "personal_records",
-            "endurance_score",
-            "hill_score",
-            "resting_heart_rate",
-            "weekly_intensity_minutes",
-          ]),
-        )
-        .optional()
-        .describe("Which metrics to return. Default: [race_predictions, personal_records]."),
-      startDate: startDateArg,
-      endDate: endDateArg,
+  server.registerTool(
+    "get_training",
+    {
+      description:
+        "Training metrics for a date. Pick via `metrics`: readiness, " +
+        "morning_readiness, status, vo2max, fitness_age.",
+      inputSchema: z.object({
+        date: dateArg,
+        metrics: z
+          .array(
+            z.enum([
+              "readiness",
+              "morning_readiness",
+              "status",
+              "vo2max",
+              "fitness_age",
+            ]),
+          )
+          .optional()
+          .describe("Which training metrics to return. Default: [readiness, status, vo2max]."),
+      }),
     },
-  },
-  async ({ metrics, startDate, endDate }) =>
-    run(async () => {
-      const c = await getClient();
-      const start = startDate ?? daysAgoIso(DEFAULT_RANGE_DAYS);
-      const end = endDate ?? todayIso();
-      return collect(metrics, ["race_predictions", "personal_records"], {
-        race_predictions: () => c.getRacePredictions(),
-        cycling_ftp: () => c.getCyclingFtp(),
-        lactate_threshold: () => c.getLactateThreshold(),
-        personal_records: () => c.getPersonalRecords(),
-        endurance_score: () => c.getEnduranceScore(start, end),
-        hill_score: () => c.getHillScore(start, end),
-        resting_heart_rate: () => c.getRestingHeartRate(start, end),
-        weekly_intensity_minutes: () => c.getWeeklyIntensityMinutes(start, end),
-      });
-    }),
-);
+    async ({ date, metrics }) =>
+      run(async () => {
+        const c = await getClient();
+        const d = date ?? todayIso();
+        return collect(metrics, ["readiness", "status", "vo2max"], {
+          readiness: () => c.getTrainingReadiness(d),
+          morning_readiness: () => c.getMorningReadiness(d),
+          status: () => c.getTrainingStatus(d),
+          vo2max: () => c.getMaxMetrics(d),
+          fitness_age: () => c.getFitnessAge(d),
+        });
+      }),
+  );
 
-server.registerTool(
-  "get_weight",
-  {
-    description:
-      "Body weight & body composition (weight, BMI, body-fat %) over a date range. " +
-      "Set include_raw for the individual weigh-in entries too. Default range: the last ~4 weeks.",
-    inputSchema: {
-      startDate: startDateArg,
-      endDate: endDateArg,
-      include_raw: z
-        .boolean()
-        .optional()
-        .describe("Also include individual weigh-in entries. Default: false."),
+  server.registerTool(
+    "get_fitness",
+    {
+      description:
+        "Fitness/performance metrics. Pick via `metrics`: race_predictions, " +
+        "cycling_ftp, lactate_threshold, personal_records (all latest, date-agnostic), " +
+        "and endurance_score, hill_score, resting_heart_rate, weekly_intensity_minutes (over the given date range).",
+      inputSchema: z.object({
+        metrics: z
+          .array(
+            z.enum([
+              "race_predictions",
+              "cycling_ftp",
+              "lactate_threshold",
+              "personal_records",
+              "endurance_score",
+              "hill_score",
+              "resting_heart_rate",
+              "weekly_intensity_minutes",
+            ]),
+          )
+          .optional()
+          .describe("Which metrics to return. Default: [race_predictions, personal_records]."),
+        startDate: startDateArg,
+        endDate: endDateArg,
+      }),
     },
-  },
-  async ({ startDate, endDate, include_raw }) =>
-    run(async () => {
-      const c = await getClient();
-      const start = startDate ?? daysAgoIso(DEFAULT_RANGE_DAYS);
-      const end = endDate ?? todayIso();
-      const out: Record<string, unknown> = {
-        composition: await c.getWeight(start, end),
-      };
-      if (include_raw) out.weighIns = await c.getWeighIns(start, end);
-      return out;
-    }),
-);
+    async ({ metrics, startDate, endDate }) =>
+      run(async () => {
+        const c = await getClient();
+        const start = startDate ?? daysAgoIso(DEFAULT_RANGE_DAYS);
+        const end = endDate ?? todayIso();
+        return collect(metrics, ["race_predictions", "personal_records"], {
+          race_predictions: () => c.getRacePredictions(),
+          cycling_ftp: () => c.getCyclingFtp(),
+          lactate_threshold: () => c.getLactateThreshold(),
+          personal_records: () => c.getPersonalRecords(),
+          endurance_score: () => c.getEnduranceScore(start, end),
+          hill_score: () => c.getHillScore(start, end),
+          resting_heart_rate: () => c.getRestingHeartRate(start, end),
+          weekly_intensity_minutes: () => c.getWeeklyIntensityMinutes(start, end),
+        });
+      }),
+  );
 
-server.registerTool(
-  "get_steps_history",
-  {
-    description:
-      "Step totals over a date range. granularity 'daily' (Garmin caps the span " +
-      "at 28 days) or 'weekly'. Default: daily, last ~4 weeks.",
-    inputSchema: {
-      startDate: startDateArg,
-      endDate: endDateArg,
-      granularity: z
-        .enum(["daily", "weekly"])
-        .optional()
-        .describe("daily or weekly. Default: daily."),
+  server.registerTool(
+    "get_weight",
+    {
+      description:
+        "Body weight & body composition (weight, BMI, body-fat %) over a date range. " +
+        "Set include_raw for the individual weigh-in entries too. Default range: the last ~4 weeks.",
+      inputSchema: z.object({
+        startDate: startDateArg,
+        endDate: endDateArg,
+        include_raw: z
+          .boolean()
+          .optional()
+          .describe("Also include individual weigh-in entries. Default: false."),
+      }),
     },
-  },
-  async ({ startDate, endDate, granularity }) =>
-    run(async () => {
-      const c = await getClient();
-      const end = endDate ?? todayIso();
-      if (granularity === "weekly") {
-        const start = startDate ?? daysAgoIso(83); // ~12 weeks
-        return c.getWeeklySteps(end, weeksBetween(start, end));
-      }
-      const start = startDate ?? daysAgoIso(27); // 28-day inclusive span
-      return c.getDailySteps(start, end);
-    }),
-);
+    async ({ startDate, endDate, include_raw }) =>
+      run(async () => {
+        const c = await getClient();
+        const start = startDate ?? daysAgoIso(DEFAULT_RANGE_DAYS);
+        const end = endDate ?? todayIso();
+        const out: Record<string, unknown> = {
+          composition: await c.getWeight(start, end),
+        };
+        if (include_raw) out.weighIns = await c.getWeighIns(start, end);
+        return out;
+      }),
+  );
 
-server.registerTool(
-  "get_activity",
-  {
-    description:
-      "Data for a single activity by activityId. Pick via `include`: summary, " +
-      "splits, weather, details (GPS/HR/power streams), hr_zones, exercise_sets.",
-    inputSchema: {
-      activityId: activityIdArg,
-      include: z
-        .array(
-          z.enum([
-            "summary",
-            "splits",
-            "weather",
-            "details",
-            "hr_zones",
-            "exercise_sets",
-          ]),
-        )
-        .optional()
-        .describe("Which parts to return. Default: [summary]."),
+  server.registerTool(
+    "get_steps_history",
+    {
+      description:
+        "Step totals over a date range. granularity 'daily' (Garmin caps the span " +
+        "at 28 days) or 'weekly'. Default: daily, last ~4 weeks.",
+      inputSchema: z.object({
+        startDate: startDateArg,
+        endDate: endDateArg,
+        granularity: z
+          .enum(["daily", "weekly"])
+          .optional()
+          .describe("daily or weekly. Default: daily."),
+      }),
     },
-  },
-  async ({ activityId, include }) =>
-    run(async () => {
-      const c = await getClient();
-      return collect(include, ["summary"], {
-        summary: () => c.getActivity(activityId),
-        splits: () => c.getActivitySplits(activityId),
-        weather: () => c.getActivityWeather(activityId),
-        details: () => c.getActivityDetails(activityId),
-        hr_zones: () => c.getActivityHrZones(activityId),
-        exercise_sets: () => c.getActivityExerciseSets(activityId),
-      });
-    }),
-);
+    async ({ startDate, endDate, granularity }) =>
+      run(async () => {
+        const c = await getClient();
+        const end = endDate ?? todayIso();
+        if (granularity === "weekly") {
+          const start = startDate ?? daysAgoIso(83); // ~12 weeks
+          return c.getWeeklySteps(end, weeksBetween(start, end));
+        }
+        const start = startDate ?? daysAgoIso(27); // 28-day inclusive span
+        return c.getDailySteps(start, end);
+      }),
+  );
 
-server.registerTool(
-  "list_activities",
-  {
-    description:
-      "List activities. Without dates: the most recent ones (use limit=1 for the " +
-      "last activity). With startDate/endDate and/or type: activities in that range, " +
-      "optionally filtered by type (e.g. running, cycling, swimming).",
-    inputSchema: {
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(50)
-        .optional()
-        .describe("Max activities (1-50). Default: 10."),
-      startDate: startDateArg,
-      endDate: endDateArg,
-      type: z
-        .string()
-        .optional()
-        .describe("Filter by activity type, e.g. 'running', 'cycling'."),
+  server.registerTool(
+    "get_activity",
+    {
+      description:
+        "Data for a single activity by activityId. Pick via `include`: summary, " +
+        "splits, weather, details (GPS/HR/power streams), hr_zones, exercise_sets.",
+      inputSchema: z.object({
+        activityId: activityIdArg,
+        include: z
+          .array(
+            z.enum([
+              "summary",
+              "splits",
+              "weather",
+              "details",
+              "hr_zones",
+              "exercise_sets",
+            ]),
+          )
+          .optional()
+          .describe("Which parts to return. Default: [summary]."),
+      }),
     },
-  },
-  async ({ limit, startDate, endDate, type }) =>
-    run(async () => {
-      const c = await getClient();
-      const n = limit ?? 10;
-      if (startDate || endDate || type) {
-        return c.getActivitiesByDate(
-          startDate ?? daysAgoIso(DEFAULT_RANGE_DAYS),
-          endDate ?? todayIso(),
-          type,
-          n,
+    async ({ activityId, include }) =>
+      run(async () => {
+        const c = await getClient();
+        return collect(include, ["summary"], {
+          summary: () => c.getActivity(activityId),
+          splits: () => c.getActivitySplits(activityId),
+          weather: () => c.getActivityWeather(activityId),
+          details: () => c.getActivityDetails(activityId),
+          hr_zones: () => c.getActivityHrZones(activityId),
+          exercise_sets: () => c.getActivityExerciseSets(activityId),
+        });
+      }),
+  );
+
+  server.registerTool(
+    "list_activities",
+    {
+      description:
+        "List activities. Without dates: the most recent ones (use limit=1 for the " +
+        "last activity). With startDate/endDate and/or type: activities in that range, " +
+        "optionally filtered by type (e.g. running, cycling, swimming).",
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe("Max activities (1-50). Default: 10."),
+        startDate: startDateArg,
+        endDate: endDateArg,
+        type: z
+          .string()
+          .optional()
+          .describe("Filter by activity type, e.g. 'running', 'cycling'."),
+      }),
+    },
+    async ({ limit, startDate, endDate, type }) =>
+      run(async () => {
+        const c = await getClient();
+        const n = limit ?? 10;
+        if (startDate || endDate || type) {
+          return c.getActivitiesByDate(
+            startDate ?? daysAgoIso(DEFAULT_RANGE_DAYS),
+            endDate ?? todayIso(),
+            type,
+            n,
+          );
+        }
+        return c.listRecentActivities(n);
+      }),
+  );
+
+  server.registerTool(
+    "get_devices",
+    {
+      description:
+        "Garmin devices paired to the account (model, firmware, last sync).",
+    },
+    async () => run(async () => (await getClient()).getDevices()),
+  );
+
+  server.registerTool(
+    "get_user_profile",
+    {
+      description:
+        "User profile & settings: units, preferences, activity level, etc.",
+    },
+    async () => run(async () => (await getClient()).getUserProfile()),
+  );
+
+  server.registerTool(
+    "get_goals",
+    {
+      description: "Goals filtered by status (active, future, or past).",
+      inputSchema: z.object({
+        status: z
+          .enum(["active", "future", "past"])
+          .optional()
+          .describe("Goal status. Default: active."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe("Max goals (1-50). Default: 30."),
+      }),
+    },
+    async ({ status, limit }) =>
+      run(async () =>
+        (await getClient()).getGoals(status ?? "active", limit ?? 30),
+      ),
+  );
+
+  server.registerTool(
+    "get_workouts",
+    {
+      description: "Saved workouts on the account.",
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe("Max workouts (1-100). Default: 50."),
+      }),
+    },
+    async ({ limit }) =>
+      run(async () => (await getClient()).getWorkouts(limit ?? 50)),
+  );
+
+  server.registerTool(
+    "get_scheduled_workouts",
+    {
+      description:
+        "Scheduled workouts / calendar for a month (defaults to the current month).",
+      inputSchema: z.object({
+        year: z
+          .number()
+          .int()
+          .min(2000)
+          .max(2100)
+          .optional()
+          .describe("Year, e.g. 2026. Default: current year."),
+        month: z
+          .number()
+          .int()
+          .min(1)
+          .max(12)
+          .optional()
+          .describe("Month 1-12. Default: current month."),
+      }),
+    },
+    async ({ year, month }) =>
+      run(async () => {
+        const now = new Date();
+        return (await getClient()).getScheduledWorkouts(
+          year ?? now.getFullYear(),
+          month ?? now.getMonth() + 1,
         );
-      }
-      return c.listRecentActivities(n);
-    }),
-);
+      }),
+  );
 
-server.registerTool(
-  "get_devices",
-  {
-    description:
-      "Garmin devices paired to the account (model, firmware, last sync).",
-  },
-  async () => run(async () => (await getClient()).getDevices()),
-);
-
-server.registerTool(
-  "get_user_profile",
-  {
-    description:
-      "User profile & settings: units, preferences, activity level, etc.",
-  },
-  async () => run(async () => (await getClient()).getUserProfile()),
-);
-
-server.registerTool(
-  "get_goals",
-  {
-    description: "Goals filtered by status (active, future, or past).",
-    inputSchema: {
-      status: z
-        .enum(["active", "future", "past"])
-        .optional()
-        .describe("Goal status. Default: active."),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(50)
-        .optional()
-        .describe("Max goals (1-50). Default: 30."),
-    },
-  },
-  async ({ status, limit }) =>
-    run(async () =>
-      (await getClient()).getGoals(status ?? "active", limit ?? 30),
-    ),
-);
-
-server.registerTool(
-  "get_workouts",
-  {
-    description: "Saved workouts on the account.",
-    inputSchema: {
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .optional()
-        .describe("Max workouts (1-100). Default: 50."),
-    },
-  },
-  async ({ limit }) =>
-    run(async () => (await getClient()).getWorkouts(limit ?? 50)),
-);
-
-server.registerTool(
-  "get_scheduled_workouts",
-  {
-    description:
-      "Scheduled workouts / calendar for a month (defaults to the current month).",
-    inputSchema: {
-      year: z
-        .number()
-        .int()
-        .min(2000)
-        .max(2100)
-        .optional()
-        .describe("Year, e.g. 2026. Default: current year."),
-      month: z
-        .number()
-        .int()
-        .min(1)
-        .max(12)
-        .optional()
-        .describe("Month 1-12. Default: current month."),
-    },
-  },
-  async ({ year, month }) =>
-    run(async () => {
-      const now = new Date();
-      return (await getClient()).getScheduledWorkouts(
-        year ?? now.getFullYear(),
-        month ?? now.getMonth() + 1,
-      );
-    }),
-);
+  return server;
+}
 
 // --- Start -------------------------------------------------------------------
-async function main(): Promise<void> {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  process.stderr.write("[garmin-mcp] MCP server running (stdio).\n");
-}
+// serveStdio owns the stdio transport and answers both 2025-era clients
+// (`initialize`, as Claude Desktop sends today) and the 2026-07-28 revision.
+const handle = serveStdio(createServer, {
+  onerror: (err) =>
+    process.stderr.write(`[garmin-mcp] Transport error: ${String(err)}\n`),
+});
+process.stderr.write("[garmin-mcp] MCP server running (stdio).\n");
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
-    // Promise.resolve: before the first Garmin request there is no singleton,
-    // and a bare `httpSingleton?.close().finally(...)` would skip the exit.
-    void Promise.resolve(httpSingleton?.close()).finally(() => process.exit(0));
+    // allSettled: before the first Garmin request there is no HTTP singleton.
+    void Promise.allSettled([handle.close(), httpSingleton?.close()]).finally(
+      () => process.exit(0),
+    );
   });
 }
-
-main().catch((err) => {
-  process.stderr.write(`[garmin-mcp] Startup failed: ${String(err)}\n`);
-  process.exit(1);
-});
