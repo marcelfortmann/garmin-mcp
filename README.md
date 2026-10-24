@@ -126,7 +126,7 @@ your password is never stored.
 - `src/garmin/auth.ts` — login cascade (mobile iOS JSON login → widget/CSRF fallback) + MFA + DI-OAuth2 ticket exchange + refresh.
 - `src/garmin/tokens.ts` — local token cache (0600).
 - `src/garmin/client.ts` — generic `connectapi()` + typed, read-only data methods.
-- `src/mcp/server.ts` — MCP server, tool registration, stdio transport.
+- `src/mcp/server.ts` — MCP server and tool registration; served over stdio via `serveStdio` (MCP TypeScript SDK v2), which answers both 2025-era clients such as Claude Desktop and the 2026-07-28 protocol revision.
 - `src/cli/login.ts` — one-time interactive login.
 
 ## Development
@@ -160,8 +160,8 @@ printf '%s\n' \
 
 Expect an `initialize` reply plus a `tools/list` reply containing all 13 tools with
 their input schemas. To also confirm that argument validation still bites, add one
-more line to the `printf` above — it should come back as `-32602`, not as a login
-error:
+more line to the `printf` above — it should come back as a tool result with
+`"isError": true` and an `Input validation error: …` text, not as a login error:
 
 ```text
 '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_activity","arguments":{"activityId":"not-a-number"}}}' \
