@@ -1,6 +1,6 @@
 {
   "name": "garmin-mcp",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Local, read-only Garmin Connect MCP server for Claude Desktop (stdio).",
   "keywords": [
     "mcp",
@@ -52,7 +52,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.6.6",
+    "@types/node": "^26.6.10",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
